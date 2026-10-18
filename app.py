@@ -18,18 +18,19 @@ for message in st.session_state['message_history']:
 user_input = st.chat_input('Type Here :')
 
 if user_input:
+
     # first add the message to the message_history
     st.session_state['message_history'].append({'role':'user', 'content':user_input})
     with st.chat_message('user'):    # User icon
-        st.text(user_input)          # User text
+        st.text(user_input)     # User text
 
-        response = chatbot.invoke(
-    {'messages': [HumanMessage(content=user_input)]},
-    config=config
-)
-
-    ai_message = response['messages'][-1].content
-  # first add the message to the message_history
-    st.session_state['message_history'].append({'role':'assistant', 'content':ai_message})
+# Assistant Code with Streaming Feature :
     with st.chat_message('assistant'):    #Assistant icon
-        st.text(ai_message)               #Assistant Text
+          ai_message = st.write_stream(
+              message_chunk.content for message_chunk, metadata in chatbot.stream(
+                   {'messages': [HumanMessage(content=user_input)]},
+                      config=config,
+                      stream_mode='messages'
+                  )      
+          )
+    st.session_state['message_history'].append({'role':'assistant', 'content':ai_message}) # add the message to the message_history
