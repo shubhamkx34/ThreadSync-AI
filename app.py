@@ -105,7 +105,12 @@ for message in st.session_state['message_history']:
 
 user_input = st.chat_input('Type Here :')
 
-config = {"configurable": {"thread_id": st.session_state["thread_id"]}}
+config = {"configurable": {"thread_id": st.session_state["thread_id"]},
+          "metadata":{
+              "thread_id":st.session_state["thread_id"]
+          },
+          "run_name":"Threadsync_Trace"
+          }
 
 if user_input:
 
