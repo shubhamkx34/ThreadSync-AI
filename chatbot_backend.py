@@ -20,6 +20,7 @@ def chat_node(state: ChatState):
 
     return {'messages':[response]}
 
+# Memory Persistence: A MemorySaver checkpointer (an in-memory storage tool) is attached to the compiled graph, allowing the backend to save and recall conversation snapshots.
 checkpoint = MemorySaver()
 
 graph = StateGraph(ChatState)
@@ -30,3 +31,4 @@ graph.add_edge(START,'chat_node')
 graph.add_edge('chat_node', END)
 
 chatbot = graph.compile(checkpointer=checkpoint)    
+#
