@@ -4,7 +4,8 @@ from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage
 from langchain_groq import ChatGroq
 from dotenv import load_dotenv
-from langgraph.checkpoint.memory import MemorySaver
+from langgraph.checkpoint.sqlite import SqliteSaver
+import sqlite3
 
 load_dotenv()
 llmModel = ChatGroq(model='openai/gpt-oss-120b')
@@ -21,7 +22,8 @@ def chat_node(state: ChatState):
     return {'messages':[response]}
 
 # Memory Persistence: A MemorySaver checkpointer (an in-memory storage tool) is attached to the compiled graph, allowing the backend to save and recall conversation snapshots.
-checkpoint = MemorySaver()
+Connection = sqlite3.connect(database="threadsync.db", check_same_thread=False)
+checkpoint = SqliteSaver(Connection)
 
 graph = StateGraph(ChatState)
 
@@ -31,4 +33,10 @@ graph.add_edge(START,'chat_node')
 graph.add_edge('chat_node', END)
 
 chatbot = graph.compile(checkpointer=checkpoint)    
-#
+
+def get_all_threads():
+    all_threads = set()
+    for ckpt in checkpoint.list(None):
+        all_threads.add(ckpt.config['configurable']['thread_id'])
+
+    return list(all_threads)

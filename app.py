@@ -1,4 +1,4 @@
-from chatbot_backend import chatbot
+from threadsync_backend import chatbot, get_all_threads
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, AIMessageChunk
 import streamlit as st
 import uuid                               
@@ -32,7 +32,7 @@ if 'thread_id' not in st.session_state:
 
 # Chat Threads saving Dictionary
 if 'chat_threads' not in st.session_state:
-    st.session_state['chat_threads'] = []
+    st.session_state['chat_threads'] = get_all_threads()
 
 # Add the current thread to the conversation list
 add_thread(st.session_state["thread_id"])
