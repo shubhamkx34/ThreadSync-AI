@@ -1,13 +1,13 @@
-pip install langgraph
-pip install langchain-openai
-pip install python-dotenv
-pip install pydantic
-pip install streamlit
-pip install langgraph-checkpoint-sqlite
-pip install langchain-google-genai
-pip install langchain-tavily
-pip install tavily-python
-pip install langchain-community
-pip install faiss-cpu
-pip install pypdf
-pip install langchain-text-splitters
+langgraph
+langchain-openai
+python-dotenv
+pydantic
+streamlit
+langgraph-checkpoint-sqlite
+langchain-google-genai
+langchain-tavily
+tavily-python
+langchain-community
+faiss-cpu
+pypdf
+langchain-text-splitters
