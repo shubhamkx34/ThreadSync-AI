@@ -67,27 +67,21 @@ for thread_id in st.session_state["chat_threads"][::-1]:
         # Temporary list for converting LangChain messages
         # into Streamlit's required message format
         temp_messages = []
+        last_tool = None
 
-        # Loop through all saved messages
         for message in messages:
-
-            # Check whether the message was sent by the user
             if isinstance(message, HumanMessage):
-                role = "user"
-
-            # Check whether the message was sent by the AI
+                temp_messages.append({"role": "user", "content": message.content})
+            elif isinstance(message, ToolMessage):
+                last_tool = getattr(message, "name", "tool")
             elif isinstance(message, AIMessage):
-                role = "assistant"
-
-            # Ignore other message types, such as ToolMessage
-            else:
-                continue
-
-            # Convert the LangChain message into a dictionary
-            temp_messages.append({
-                "role": role,
-                "content": message.content
-            })
+                if not message.content:
+                    continue
+                content = message.content
+                if last_tool:
+                    content = f"⚙️ *Using {last_tool}...*\n\n{content}"
+                    last_tool = None
+                temp_messages.append({"role": "assistant", "content": content}) 
 
 
         # Replace the current UI history with the selected conversation
@@ -99,63 +93,41 @@ for thread_id in st.session_state["chat_threads"][::-1]:
 
 # ========================= Main chat interface =========================
 # Loading Conversation History in the Chat Interface
+
 for message in st.session_state['message_history']:
-    with st.chat_message(message['role']):    # Identify icon using roles like user, assitant
-        st.text(message['content'])           # Text history
+    if message['content']:
+        with st.chat_message(message['role']):
+            st.markdown(message['content'])
 
 user_input = st.chat_input('Type Here :')
 
-config = {"configurable": {"thread_id": st.session_state["thread_id"]},
-          "metadata":{
-              "thread_id":st.session_state["thread_id"]
-          },
-          "run_name":"Threadsync_Trace"
-          }
+config = {
+    "configurable": {"thread_id": st.session_state["thread_id"]},
+    "metadata": {"thread_id": st.session_state["thread_id"]},
+    "run_name": "Threadsync_Trace"
+}
 
 if user_input:
+    st.session_state['message_history'].append({'role': 'user', 'content': user_input})
+    with st.chat_message('user'):
+        st.markdown(user_input)
 
-    # first add the message to the message_history[USER]
-    st.session_state['message_history'].append({'role':'user', 'content':user_input})
-    with st.chat_message('user'):    # User icon
-        st.text(user_input)     # Creates Visual Box of User text 
-
-# Assistant Code with Streaming Feature :
-  
     with st.chat_message("assistant"):
-           # Use a mutable holder so the generator can set/modify it
-           status_holder = {"box": None}
-   
-           def ai_only_stream():
-               for message_chunk, metadata in chatbot.stream(
-                   {"messages": [HumanMessage(content=user_input)]},
-                   config=config,
-                   stream_mode="messages",
-               ):
-                   # Lazily create & update the SAME status container when any tool runs
-                   if isinstance(message_chunk, ToolMessage):
-                       tool_name = getattr(message_chunk, "name", "tool")
-                       if status_holder["box"] is None:
-                           status_holder["box"] = st.status(
-                               f"⚙️ Using `{tool_name}` …", expanded=True
-                           )
-                       else:
-                           status_holder["box"].update(
-                               label=f"⚙️ Using `{tool_name}` …",
-                               state="running",
-                               expanded=True,
-                           )
-   
-                   # Stream ONLY assistant tokens
-                   if isinstance(message_chunk, AIMessage):
-                       yield message_chunk.content
-   
-           ai_message = st.write_stream(ai_only_stream())
-   
-           # Finalize only if a tool was actually used
-           if status_holder["box"] is not None:
-               status_holder["box"].update(
-                   label="Tool finished ⚡", state="complete", expanded=False
-               )
-   
-   
-    st.session_state['message_history'].append({'role':'assistant', 'content':ai_message}) # add the message to the message_history[AI]
+        def ai_only_stream():
+            for message_chunk, metadata in chatbot.stream(
+                {"messages": [HumanMessage(content=user_input)]},
+                config=config,
+                stream_mode="messages",
+            ):
+                # Yield the tool name directly into the stream so st.write_stream captures and saves it
+                if isinstance(message_chunk, ToolMessage):
+                    tool_name = getattr(message_chunk, "name", "tool")
+                    yield f"⚙️ *Using {tool_name}...*\n\n"
+
+                # Only yield AI text if it is not empty
+                if isinstance(message_chunk, AIMessage) and message_chunk.content:
+                    yield message_chunk.content
+
+        ai_message = st.write_stream(ai_only_stream())
+
+    st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})

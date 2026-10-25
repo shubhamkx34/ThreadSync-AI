@@ -20,37 +20,13 @@ llmModel = ChatGroq(model='openai/gpt-oss-120b')
 
 # Live Search Tool 1
 search_tool = TavilySearch(
-    max_results=5,
+    max_results=3,
     topic="general",
-    search_depth="advanced"
+    search_depth="advanced",
+    include_raw_content=False
 )
 
-# Calc Tool 2
-@tool
-def calculator(expression: str) -> str:
-    """
-    Useful for simple math calculations.
-    Input should be a valid math expression.
-    Example: 2 + 2, math.sqrt(16), 10 * 5
-    """
-
-    try:
-        allowed = {
-            "math": math,
-            "abs": abs,
-            "round": round,
-            "min": min,
-            "max": max,
-            "sum": sum
-        }
-
-        result = eval(expression, {"__builtins__": {}}, allowed)
-        return str(result)
-
-    except Exception as e:
-        return f"Calculation error: {str(e)}"
-
-# Live stock Fetch Tool 3:
+# Live stock Fetch Tool 2:
 @tool
 def get_stock_price(symbol: str) -> dict:
     """
@@ -61,7 +37,7 @@ def get_stock_price(symbol: str) -> dict:
     r = requests.get(url)
     return r.json()
 
-# Live Weather Fetch Tool 4:
+# Live Weather Fetch Tool 3:
 @tool
 def get_weather_data(city: str) -> str:
     """
@@ -88,7 +64,7 @@ def get_weather_data(city: str) -> str:
     )    
 
 # LLM + Tools Connection:
-tools = [search_tool,calculator, get_stock_price,get_weather_data]# tool list
+tools = [search_tool, get_stock_price,get_weather_data]# tool list
 llm_with_tools = llmModel.bind_tools(tools)# Make the LLM tool-aware
 
 
@@ -97,10 +73,10 @@ from langgraph.graph.message import add_messages
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
-# Nodes 1
+# Nodes 1 :message history sent to the AI
 def chat_node(state: ChatState):
     #take user query from state
-    messages = state['messages']
+    messages = state['messages'][-6:]
     # send to llm
     response = llm_with_tools.invoke(messages)
     # response store state
