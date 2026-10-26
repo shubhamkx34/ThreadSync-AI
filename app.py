@@ -1,7 +1,10 @@
 from threadsync_backend import chatbot, get_all_threads
+from rag_feature import ingest_rag_document
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, AIMessageChunk, ToolMessage
 import streamlit as st
-import uuid                               
+import uuid                
+import os
+import tempfile               
 
 # To generate unique identification label for a chat session/Thread.
 def generate_thread_id():
@@ -99,13 +102,45 @@ for message in st.session_state['message_history']:
         with st.chat_message(message['role']):
             st.markdown(message['content'])
 
-user_input = st.chat_input('Type Here :')
+user_input = None
 
 config = {
     "configurable": {"thread_id": st.session_state["thread_id"]},
     "metadata": {"thread_id": st.session_state["thread_id"]},
     "run_name": "Threadsync_Trace"
 }
+
+# ========================= Fixed chat input with PDF upload ========================
+# accept_file=True adds the attachment button inside the chat input.
+# file_type=["pdf"] allows PDF files only.
+submission = st.chat_input(
+    "Type here",
+    accept_file=True,
+    file_type=["pdf"]
+)
+
+if submission:
+    user_input = submission.text
+
+    if submission.files:
+        uploaded_pdf = submission.files[0]
+
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+                f.write(uploaded_pdf.getvalue())
+                pdf_path = f.name
+
+            with st.spinner(f"Processing {uploaded_pdf.name}..."):
+                ingest_rag_document(pdf_path)
+
+            st.toast(f"{uploaded_pdf.name} processed successfully.", icon="✅")
+
+        except Exception as error:
+            st.error(f"PDF processing failed: {error}")
+
+        finally:
+            if "pdf_path" in locals() and os.path.exists(pdf_path):
+                os.remove(pdf_path)
 
 if user_input:
     st.session_state['message_history'].append({'role': 'user', 'content': user_input})
