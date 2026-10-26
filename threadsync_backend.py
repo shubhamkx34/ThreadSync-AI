@@ -10,13 +10,14 @@ import sqlite3
 from tools_feature import search_tool, get_stock_price, get_weather_data
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import trim_messages
+from rag_feature import rag_tool
 
 load_dotenv()
 llmModel = ChatGroq(model='openai/gpt-oss-120b')
 
 # LLM + Tools Connection:
-tools = [search_tool, get_stock_price,get_weather_data]# tool list
-llm_with_tools = llmModel.bind_tools(tools)# Make the LLM tool-aware
+tools = [search_tool, get_stock_price,get_weather_data, rag_tool] # tool list
+llm_with_tools = llmModel.bind_tools(tools) # Make the LLM tool-aware
 
 
 from langgraph.graph.message import add_messages
@@ -24,7 +25,7 @@ from langgraph.graph.message import add_messages
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
-# Nodes 1 :message history sent to the AI
+# Nodes 1 : message history sent to the AI
 def chat_node(state: ChatState):
     system_message = SystemMessage(
         content="You are a helpful assistant. Use available tools when necessary to answer user queries."
@@ -36,7 +37,7 @@ def chat_node(state: ChatState):
     # Keep recent conversation history within a token limit
     recent_messages = trim_messages(
         state["messages"],
-        max_tokens=6000,
+        max_tokens=3000,
         token_counter=llmModel,
         strategy="last",
         start_on="human",
