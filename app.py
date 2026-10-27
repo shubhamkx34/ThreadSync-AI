@@ -133,7 +133,7 @@ if submission:
             with st.spinner(f"Processing {uploaded_pdf.name}..."):
                 ingest_rag_document(pdf_path)
 
-            st.toast(f"{uploaded_pdf.name} processed successfully.", icon="✅")
+            st.toast(f"{uploaded_pdf.name} processed successfully.", icon="✔️")
 
         except Exception as error:
             st.error(f"PDF processing failed: {error}")
