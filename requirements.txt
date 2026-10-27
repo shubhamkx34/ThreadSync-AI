@@ -1,4 +1,8 @@
 langgraph
+langchain-groq
+requests
+langchain-core
+langsmith
 langchain-openai
 python-dotenv
 pydantic
