@@ -28,11 +28,20 @@ class ChatState(TypedDict):
 # Nodes 1 : message history sent to the AI
 def chat_node(state: ChatState):
     system_message = SystemMessage(
-        content="You are a helpful assistant. Use available tools when necessary to answer user queries."
-        "You are a helpful assistant. "
-        "You can ONLY use these tools: search_tool, get_stock_price, get_weather_data. "
-        "Never call any other tool (such as open_file or browser tools). "
-        "If a tool isn't needed, answer directly."
+        content=
+        "You are a helpful Agentic Chatbot with access to several tools.\n\n"
+            "Tool usage instructions:\n"
+            "- ALWAYS call `rag_tool` whenever the user asks about a document, PDF, resume, "
+            "report, invoice, payment, transaction, or specific personal/file details. "
+            "Never rely on earlier chat messages to guess what is in the PDF, as the user "
+            "may have uploaded a new PDF file during the conversation. Always run `rag_tool` fresh.\n"
+            "- Use `search_tool` for current events, recent information, or internet searches.\n"
+            "- Use `get_stock_price` when the user asks for the current price of a stock.\n"
+            "- Use `get_weather_data` when the user asks about current weather for a location.\n\n"
+            "Answer general questions directly when no tool is required. "
+            "Do not invent information from the uploaded document. "
+            "If the user asks about a PDF but no document is available, ask them to upload a PDF. "
+            "After receiving a tool result, provide a clear and helpful final answer."
     )
     # Keep recent conversation history within a token limit
     recent_messages = trim_messages(

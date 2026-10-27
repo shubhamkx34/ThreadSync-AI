@@ -53,13 +53,14 @@ def get_retriever():
 @tool
 def rag_tool(query: str) -> str:
     """
-    Retrieve relevant information from the PDF document.
-
-    Use this tool when the user asks factual or conceptual questions
-    that may be answered using the stored PDF documents.
+   Search and retrieve information from the currently uploaded PDF document 
+    (such as a resume, report, invoice, payment receipt, or any other file).
+    Always call this tool whenever the user asks about personal details, payments, 
+    amounts, reports, or any specific data that could be inside an uploaded file, 
+    even if a different document was discussed earlier in the chat.
 
     Args:
-        query: The question or search query used to retrieve PDF content.
+        query: The search query or keywords to look up in the PDF.
     """
     retriever = get_retriever()
     documents = retriever.invoke(query)

@@ -121,6 +121,7 @@ submission = st.chat_input(
 
 if submission:
     user_input = submission.text
+    llm_input = user_input
 
     if submission.files:
         uploaded_pdf = submission.files[0]
@@ -134,6 +135,13 @@ if submission:
                 ingest_rag_document(pdf_path)
 
             st.toast(f"{uploaded_pdf.name} processed successfully.", icon="✔️")
+
+            # Notify the AI that a new file is active, even if uploaded mid-conversation
+            if user_input:
+                llm_input = f"[System Note: A new PDF '{uploaded_pdf.name}' was just uploaded. Call rag_tool to answer questions about it.]\n\n{user_input}"
+            else:
+                user_input = f"Uploaded `{uploaded_pdf.name}`"
+                llm_input = f"[System Note: A new PDF '{uploaded_pdf.name}' was just uploaded. Call rag_tool to summarize or acknowledge it.]"
 
         except Exception as error:
             st.error(f"PDF processing failed: {error}")
@@ -150,16 +158,14 @@ if user_input:
     with st.chat_message("assistant"):
         def ai_only_stream():
             for message_chunk, metadata in chatbot.stream(
-                {"messages": [HumanMessage(content=user_input)]},
+                {"messages": [HumanMessage(content=llm_input)]},
                 config=config,
                 stream_mode="messages",
             ):
-                # Yield the tool name directly into the stream so st.write_stream captures and saves it
                 if isinstance(message_chunk, ToolMessage):
                     tool_name = getattr(message_chunk, "name", "tool")
                     yield f"⚙️ *Using {tool_name}...*\n\n"
 
-                # Only yield AI text if it is not empty
                 if isinstance(message_chunk, AIMessage) and message_chunk.content:
                     yield message_chunk.content
 
