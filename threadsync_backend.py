@@ -11,12 +11,13 @@ from tools_feature import search_tool, get_stock_price, get_weather_data
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import trim_messages
 from rag_feature import rag_tool
+from HITL_feature import purchase_stock
 
 load_dotenv()
 llmModel = ChatGroq(model='openai/gpt-oss-120b')
 
 # LLM + Tools Connection:
-tools = [search_tool, get_stock_price,get_weather_data, rag_tool] # tool list
+tools = [search_tool, get_stock_price,get_weather_data, rag_tool, purchase_stock] # tool list
 llm_with_tools = llmModel.bind_tools(tools) # Make the LLM tool-aware
 
 

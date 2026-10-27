@@ -4,7 +4,8 @@ from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, AIMess
 import streamlit as st
 import uuid                
 import os
-import tempfile               
+import tempfile              
+from langgraph.types import interrupt, Command 
 
 # To generate unique identification label for a chat session/Thread.
 def generate_thread_id():
@@ -171,4 +172,40 @@ if user_input:
 
         ai_message = st.write_stream(ai_only_stream())
 
-    st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+    if ai_message:
+        st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
+
+# ========================= [HITL =========================
+# Check if the graph is currently paused by interrupt() in HITL_feature.py
+current_state = chatbot.get_state(config)
+
+if current_state.tasks and current_state.tasks[0].interrupts:
+    interrupt_prompt = current_state.tasks[0].interrupts[0].value
+
+    with st.chat_message("assistant"):
+        st.warning(f"⏸️ **Action Required:** {interrupt_prompt}")
+        col1, col2 = st.columns(2)
+        decision = None
+
+        if col1.button("✅ Approve (Yes)", use_container_width=True):
+            decision = "yes"
+        elif col2.button("❌ Decline (No)", use_container_width=True):
+            decision = "no"
+
+        if decision:
+            def resume_stream():
+                for message_chunk, metadata in chatbot.stream(
+                    Command(resume=decision),
+                    config=config,
+                    stream_mode="messages",
+                ):
+                    if isinstance(message_chunk, ToolMessage):
+                        tool_name = getattr(message_chunk, "name", "tool")
+                        yield f"⚙️ *Using {tool_name}...*\n\n"
+                    if isinstance(message_chunk, AIMessage) and message_chunk.content:
+                        yield message_chunk.content
+
+            resumed_ai_message = st.write_stream(resume_stream())
+            if resumed_ai_message:
+                st.session_state['message_history'].append({'role': 'assistant', 'content': resumed_ai_message})
+            st.rerun()
