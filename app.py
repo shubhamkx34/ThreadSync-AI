@@ -175,37 +175,33 @@ if user_input:
     if ai_message:
         st.session_state['message_history'].append({'role': 'assistant', 'content': ai_message})
 
-# ========================= [HITL =========================
+# ========================= [HITL]=========================
 # Check if the graph is currently paused by interrupt() in HITL_feature.py
 current_state = chatbot.get_state(config)
 
 if current_state.tasks and current_state.tasks[0].interrupts:
-    interrupt_prompt = current_state.tasks[0].interrupts[0].value
-
     with st.chat_message("assistant"):
-        st.warning(f"⏸️ **Action Required:** {interrupt_prompt}")
+        # Directly read the prompt without creating an extra variable
+        st.warning(f"**Action Required:** {current_state.tasks[0].interrupts[0].value}")
+        
         col1, col2 = st.columns(2)
-        decision = None
-
-        if col1.button("✅ Approve (Yes)", use_container_width=True):
-            decision = "yes"
-        elif col2.button("❌ Decline (No)", use_container_width=True):
-            decision = "no"
+        # Combine the button clicks into a single line of logic
+        decision = "yes" if col1.button("Approve (Yes)", use_container_width=True) else "no" if col2.button("Decline (No)", use_container_width=True) else None
 
         if decision:
             def resume_stream():
-                for message_chunk, metadata in chatbot.stream(
-                    Command(resume=decision),
-                    config=config,
-                    stream_mode="messages",
-                ):
-                    if isinstance(message_chunk, ToolMessage):
-                        tool_name = getattr(message_chunk, "name", "tool")
-                        yield f"⚙️ *Using {tool_name}...*\n\n"
-                    if isinstance(message_chunk, AIMessage) and message_chunk.content:
-                        yield message_chunk.content
+        # chunk: This variable catches the first piece of information, which is the actual text we want to display on the screen.
+        # It catches the second piece of information (the metadata). By naming it _
+        # Command(resume=decision) takes your "yes" or "no" and injects it directly back into the paused backend to unfreeze it.
+                for chunk, _ in chatbot.stream(Command(resume=decision), config=config, stream_mode="messages"):
+        # Checks if the current chunk of data is just a notification that a tool finished running
+                    if isinstance(chunk, ToolMessage):
+                        yield f"⚙️ *Using {chunk.name}...*\n\n"
+        # Checks if the chunk is actual spoken text from the AI and ensures it is not empty                
+                    if isinstance(chunk, AIMessage) and chunk.content:
+                        yield chunk.content
 
-            resumed_ai_message = st.write_stream(resume_stream())
-            if resumed_ai_message:
-                st.session_state['message_history'].append({'role': 'assistant', 'content': resumed_ai_message})
+            result = st.write_stream(resume_stream())
+            st.session_state['message_history'].append({'role': 'assistant', 'content': result})
             st.rerun()
+ 
