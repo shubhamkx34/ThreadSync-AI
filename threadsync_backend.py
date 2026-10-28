@@ -10,6 +10,7 @@ import sqlite3
 from tools_feature import search_tool, get_stock_price, get_weather_data
 from langgraph.prebuilt import ToolNode, tools_condition
 from langchain_core.messages import trim_messages
+from langchain_core.messages.utils import count_tokens_approximately
 from rag_feature import rag_tool
 from HITL_feature import purchase_stock
 
@@ -48,7 +49,7 @@ def chat_node(state: ChatState):
     recent_messages = trim_messages(
         state["messages"],
         max_tokens=3000,
-        token_counter=llmModel,
+        token_counter=count_tokens_approximately,
         strategy="last",
         start_on="human",
         include_system=False
