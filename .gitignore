@@ -4,3 +4,4 @@ __pycache__
 node_modules
 faiss_DB
 threadsync.db
+CICD.md
