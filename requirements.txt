@@ -15,5 +15,3 @@ langchain-community
 faiss-cpu
 pypdf
 langchain-text-splitters
-transformers
-torch
