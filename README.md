@@ -1,8 +1,8 @@
 # ThreadSync AI
 
-**A stateful, tool-using AI assistant built with LangGraph, LangChain and Streamlit.** ThreadSync AI brings multi-conversation chat, PDF question-answering (RAG), live information tools, and human approval for simulated stock orders into one application.
+**A stateful, tool-using AI assistant built with LangGraph, LangChain, and Streamlit—fully containerized with Docker and deployed on AWS EC2 via GitHub Actions CI/CD.** ThreadSync AI brings multi-conversation chat, question-answering (RAG) by attaching source files, live information tools, and human approval for simulated stock orders into one production-ready application.
 
-It is designed to demonstrate practical agentic AI patterns: routing requests to tools, maintaining conversation state across sessions, retrieving information from uploaded documents, and pausing a workflow when a human decision is required.
+It is designed to demonstrate practical agentic AI patterns: routing requests to tools, maintaining conversation state across sessions, retrieving information from uploaded documents, pausing a workflow when a human decision is required, and automating cloud deployments.
 
 ## Table of contents
 
@@ -11,14 +11,15 @@ It is designed to demonstrate practical agentic AI patterns: routing requests to
 - [How it works](#how-it-works)
 - [Technology stack](#technology-stack)
 - [Repository structure](#repository-structure)
-- [Getting started](#getting-started)
+- [Getting started (Local Setup)](#getting-started-local-setup)
 - [Environment variables](#environment-variables)
+- [Docker & CI/CD Deployment (AWS EC2)](#docker--cicd-deployment-aws-ec2)
 - [Using the application](#using-the-application)
 - [Project scope and notes](#project-scope-and-notes)
 
 ## Project overview
 
-Many chat applications answer questions from a single prompt but do not combine durable conversation state, document retrieval, external tools, and human review in one workflow. ThreadSync AI explores how these capabilities can work together in a conversational application.
+Many chat applications answer questions from a single prompt but do not combine durable conversation state, document retrieval, external tools, and human review in one workflow. ThreadSync AI explores how these capabilities can work together in a conversational application and how to ship them with a modern DevOps pipeline.
 
 ### What it can do
 
@@ -30,6 +31,7 @@ Many chat applications answer questions from a single prompt but do not combine 
 - Stream assistant output and expose tool activity in the chat interface.
 - Reduce the message history sent to the language model with LangChain's `trim_messages` utility.
 - Optionally send traces to LangSmith for workflow inspection and debugging.
+- Automatically build, push, and deploy updates to an AWS EC2 instance using Docker and GitHub Actions.
 
 ## Key features
 
@@ -57,11 +59,15 @@ Files can be uploaded through the chat input. The application loads the document
 
 The `purchase_stock` tool uses LangGraph's `interrupt()` mechanism to pause the workflow before confirming a simulated order. The Streamlit interface presents **Approve** and **Decline** controls; the chosen decision resumes the graph through `Command(resume=...)`.
 
-> **Safety note:** The stock-purchase feature is a simulation of actual working of HITL. It does not execute real trades.
+> **Safety note:** The stock-purchase feature is a simulation of the actual working of HITL. It does not execute real trades.
 
 ### 5. Context management and observability
 
 The backend trims the messages supplied to the model to a configured token budget. LangSmith tracing can also be enabled through environment variables to inspect runs and help debug tool calls.
+
+### 6. Automated Cloud Deployment (CI/CD)
+
+The repository includes a production-optimized `Dockerfile` and a GitHub Actions workflow (`.github/workflows/cicd.yaml`) that automates Continuous Integration, Docker Hub image publishing, and Continuous Deployment onto a self-hosted AWS EC2 runner with automated health checks.
 
 ## How it works
 
@@ -113,19 +119,23 @@ In the normal tool cycle, the graph runs the requested tool and returns its resu
 | User interface | Streamlit |
 | Agent workflow and tool routing | LangGraph, LangChain, LangChain Core |
 | Chat model | Groq — `openai/gpt-oss-120b` |
-| Embeddings | OpenRouter — `nvidia/nemotron-3-embed-1b:free` |
+| Embeddings | OpenRouter — `nvidia/nemotron-3-embed-1b` |
 | PDF loading and splitting | PyPDF, `RecursiveCharacterTextSplitter` |
 | Vector search | FAISS (CPU) |
 | Conversation checkpointing | SQLite, `langgraph-checkpoint-sqlite` |
 | Web search | Tavily |
 | Stock quotes | Alpha Vantage |
 | Weather | Weatherstack |
-| Optional tracing | LangSmith |
+| Observability & Tracing | LangSmith |
+| DevOps & Deployment | Docker, Docker Hub, GitHub Actions (CI/CD), AWS EC2 |
 
 ## Repository structure
 
 ```text
 ThreadSync-AI/
+├── .github/
+│   └── workflows/
+│       └── cicd.yaml              # GitHub Actions CI/CD pipeline (Build, Push, Deploy to EC2)
 ├── app.py                         # Streamlit interface, chat threads, streaming, PDF upload and HITL controls
 ├── threadsync_backend.py          # LangGraph StateGraph, LLM setup, tool routing and SQLite checkpointer
 ├── tools_feature.py               # Tavily search, stock quote and weather tools
@@ -133,15 +143,16 @@ ThreadSync-AI/
 ├── HITL_feature.py                # Simulated stock-purchase tool with approval interrupt
 ├── Workflows/
 │   ├── HITL_Workflow.ipynb        # HITL workflow exploration
-│   ├── LangGraph Workflow.ipynb    # LangGraph workflow exploration
+│   ├── LangGraph Workflow.ipynb   # LangGraph workflow exploration
 │   └── Rag_Workflow.ipynb         # RAG workflow exploration
-├── Res.pdf                        # PDF included with the project
+├── Dockerfile                     # Production container definition for Streamlit & FAISS
+├── .dockerignore                  # Excludes unnecessary local files from Docker build context
 ├── requirements.txt               # Python package dependencies
 ├── .gitignore                     # Excludes local secrets, databases and generated files
 └── README.md
 ```
 
-## Getting started
+## Getting started (Local Setup)
 
 ### Prerequisites
 
@@ -156,27 +167,36 @@ cd ThreadSync-AI
 ```
 
 ### 2. Create and Activate a Virtual Environment
+
 ```bash
 # Using Conda
 conda create -n langagent python=3.11 -y
 conda activate langagent
 
+# Or using venv
+python -m venv venv
+source venv/bin/activate      # On Windows: venv\Scripts\activate
+```
+
 ### 3. Install Dependencies
+
 ```bash
 pip install -r requirements.txt
 ```
 
+### 4. Configure Environment Variables
 
-### 4. Start the application
+Create a `.env` file in the root directory (see [Environment variables](#environment-variables) below).
+
+### 5. Start the application
 
 ```bash
 streamlit run app.py
 ```
 
+## Environment variables
 
-
-### 5. Configure Environment Variables :
-Create a `.env` file in the root directory and add your API keys:
+Create a `.env` file in the root directory for local development, or configure these keys in **GitHub Secrets** (`Settings > Secrets and variables > Actions`) for CI/CD deployment:
 
 ```env
 # LLM & Embeddings
@@ -186,15 +206,41 @@ OPENAI_API_KEY="your_openai_api_key"
 
 # External Tools
 TAVILY_API_KEY="your_tavily_api_key"
-WEATHERSTACK_API_KEY="your_weather_api_key"
+WEATHERSTACK_API_KEY="your_weatherstack_api_key"
 ALPHA_VANTAGE_API_KEY="your_alpha_vantage_api_key"
 
-# LangSmith Observability (Optional)
+# LangSmith Observability
 LANGSMITH_TRACING="true"
 LANGSMITH_ENDPOINT="https://api.smith.langchain.com"
 LANGSMITH_API_KEY="your_langsmith_api_key"
-LANGSMITH_PROJECT="ThreadSync-Agentic-AI"
+LANGSMITH_AGENT_ID="your_langsmith_agent_id"
+LANGSMITH_AGENT_ENVIRONMENT="your_langsmith_environment"
 ```
+
+## Docker & CI/CD Deployment (AWS EC2)
+
+### Running locally with Docker
+
+```bash
+# Build the Docker image
+docker build -t threadsync-ai .
+
+# Run the container on port 8501 using your local .env file
+docker run -d --name stapp -p 8501:8501 --env-file .env threadsync-ai
+```
+
+### Automated CI/CD Pipeline
+
+Every push to the `main` branch triggers the GitHub Actions workflow (`.github/workflows/cicd.yaml`):
+
+1. **Continuous Integration (`integration`):** Checks out the code and executes linting and unit test checks.
+2. **Build & Push (`push_to_registry`):** Uses Docker Buildx with GitHub Actions layer caching to build the `python:3.11-slim` image and pushes `:main` and `:sha` tags to **Docker Hub**.
+3. **Continuous Deployment (`continuous_deployment`):** Runs on a **self-hosted AWS EC2 runner** (`us-east-1`), pulls the latest image from Docker Hub, injects application secrets as environment variables, restarts the `stapp` container on port `8501`, and verifies the Streamlit `/_stcore/health` endpoint.
+
+**Additional GitHub Secrets required for CI/CD:**
+- `DOCKER_USERNAME` — Your Docker Hub username
+- `DOCKER_PASSWORD` — Your Docker Hub access token
+- `IMAGE_NAME` — Target repository/image name (e.g., `threadsync-ai`)
 
 ## Using the application
 
@@ -207,11 +253,10 @@ LANGSMITH_PROJECT="ThreadSync-Agentic-AI"
 
 ## Project scope and notes
 
-- This project demonstrates agentic workflow patterns and integrations; it should not be described as a production financial system.
+- This project demonstrates agentic workflow patterns, tool integrations, and cloud CI/CD deployment; it is not a production financial trading system.
 - External data depends on the availability, API limits, and credentials of Tavily, Alpha Vantage, Weatherstack, Groq, and OpenRouter.
-- The SQLite conversation database and FAISS index are local generated files. Their persistence and lifecycle are separate from each other.
-- The configured FAISS index is stored in `faiss_DB/`. Keep local generated files and API credentials out of version control.
+- The SQLite conversation database (`threadsync.db`) and FAISS index (`faiss_DB/`) are generated runtime files and are excluded from version control and Docker build contexts via `.gitignore` and `.dockerignore`.
 
 ---
 
-**Built as a hands-on project exploring conversational AI, LangGraph orchestration, RAG, tool calling, state persistence, and human-in-the-loop workflows.**
+**Built as a hands-on project exploring conversational AI, LangGraph orchestration, RAG, tool calling, state persistence, human-in-the-loop workflows, and automated Docker/AWS CI/CD deployment.**
