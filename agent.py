@@ -20,7 +20,16 @@ os.environ["SSL_CERT_FILE"]=certifi.where()
 os.enviorn["REQUESTS_CA_BUNDLE"]=certifi.where()
 
 load_dotenv()
-llmModel = ChatGroq(model='openai/gpt-oss-120b')
+DEFAULT_MODEL = "openai/gpt-oss-120b"
+llmModel = ChatGroq(model=DEFAULT_MODEL)
+
+ALLOWED_MODELS={
+      "Gemini 3.8 Flash": "gemini-3.8-flash",
+    "Gemini 3.6 Flash": "gemini-3.6-flash",
+    "Gemini 3.5 Flash-Lite": "gemini-3.5-flash-lite",
+    "Gemini 3.1 Flash-Lite": "gemini-3.1-flash-lite",
+     "GPT-OSS 20B": "openai/gpt-oss-20b"
+}
 
 # LLM + Tools Connection:
 tools = [search_tool, get_stock_price,get_weather_data, rag_tool, purchase_stock] # tool list
@@ -70,7 +79,10 @@ def chat_node(state: ChatState):
 tool_node = ToolNode(tools)
 
 # Memory Persistence: A MemorySaver checkpointer (an in-memory storage tool) is attached to the compiled graph, allowing the backend to save and recall conversation snapshots.
-Connection = sqlite3.connect(database="threadsync.db", check_same_thread=False)
+db_folder = Path("ThreadSync_DB")
+db_folder.mkdir(exist_ok=True)
+db_path = db_folder / "threadsync.db"
+Connection = sqlite3.connect(database=str(db_path), check_same_thread=False)
 checkpoint = SqliteSaver(Connection)
 
 
