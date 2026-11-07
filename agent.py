@@ -1,4 +1,4 @@
-# Workflow :
+# Agent Workflow :
 import os 
 from langgraph.graph import START , StateGraph , END
 from typing import TypedDict, Annotated
@@ -13,6 +13,11 @@ from langchain_core.messages import trim_messages
 from langchain_core.messages.utils import count_tokens_approximately
 from rag_feature import rag_tool
 from HITL_feature import purchase_stock
+from pathlib import Path
+import certifi
+
+os.environ["SSL_CERT_FILE"]=certifi.where()
+os.enviorn["REQUESTS_CA_BUNDLE"]=certifi.where()
 
 load_dotenv()
 llmModel = ChatGroq(model='openai/gpt-oss-120b')

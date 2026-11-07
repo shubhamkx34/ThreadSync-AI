@@ -23,7 +23,7 @@ try:
     from langgraph.types import Command
 
     from rag_feature import ingest_rag_document
-    from threadsync_backend import chatbot, checkpoint, get_all_threads
+    from agent import chatbot, checkpoint, get_all_threads
 except Exception as exc:  # noqa: BLE001
     st.error(
         f"Could not start the ThreadSync backend: `{exc}`\n\n"
