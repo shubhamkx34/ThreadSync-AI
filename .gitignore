@@ -5,3 +5,4 @@ node_modules
 faiss_DB
 threadsync.db
 CICD.md
+ThreadSync_DB

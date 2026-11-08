@@ -5,6 +5,7 @@ from typing import TypedDict, Annotated
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.checkpoint.sqlite import SqliteSaver
 import sqlite3
 from tools_feature import search_tool, get_stock_price, get_weather_data
@@ -17,13 +18,18 @@ from pathlib import Path
 import certifi
 
 os.environ["SSL_CERT_FILE"]=certifi.where()
-os.enviorn["REQUESTS_CA_BUNDLE"]=certifi.where()
+os.environ["REQUESTS_CA_BUNDLE"]=certifi.where()
 
 load_dotenv()
+
 DEFAULT_MODEL = "openai/gpt-oss-120b"
-llmModel = ChatGroq(model=DEFAULT_MODEL)
+def get_llm(model_id):
+    if "gemini" in model_id.lower(): # If the model string contains "gemini", use the Google provider
+        return ChatGoogleGenerativeAI(model=model_id)
+    return ChatGroq(model=model_id)    # Otherwise, use the Groq provider
 
 ALLOWED_MODELS={
+    "GPT-OSS 120B": "openai/gpt-oss-120b",
       "Gemini 3.8 Flash": "gemini-3.8-flash",
     "Gemini 3.6 Flash": "gemini-3.6-flash",
     "Gemini 3.5 Flash-Lite": "gemini-3.5-flash-lite",
@@ -33,16 +39,20 @@ ALLOWED_MODELS={
 
 # LLM + Tools Connection:
 tools = [search_tool, get_stock_price,get_weather_data, rag_tool, purchase_stock] # tool list
-llm_with_tools = llmModel.bind_tools(tools) # Make the LLM tool-aware
-
 
 from langgraph.graph.message import add_messages
-
 class ChatState(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
 
 # Nodes 1 : message history sent to the AI
-def chat_node(state: ChatState):
+def chat_node(state: ChatState, config: dict):
+
+    # 1. Read the selected model from the config, fallback to DEFAULT_MODEL
+    model_id = config.get("configurable", {}).get("model_id", DEFAULT_MODEL)
+    # 2. Dynamically load the selected model and bind the tools
+    active_llm = get_llm(model_id)
+    llm_with_tools = active_llm.bind_tools(tools)
+
     system_message = SystemMessage(
         content=
         "You are a helpful Agentic Chatbot with access to several tools.\n\n"
