@@ -21,4 +21,3 @@ uvicorn
 jinja2
 python-multipart
 docx2txt
-sqlalchemy
