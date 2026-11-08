@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<!--
+  ThreadSync frontend: one file, three parts.
+
+  1. <style>   CSS   → section 1 holds colours, fonts and sizes you can tweak
+  2. <body>    HTML  → the page structure (sidebar, chat area, typing bar, dialog)
+  3. <script>  JS    → section 1 (CONFIG) holds models, server URLs and UI text
+
+  Quick tweaks
+    Change colours / fonts / widths ... CSS section 1 (DESIGN SETTINGS)
+    Add or remove a model ............ JS section 1 (CONFIG.models)
+    Change wording (title, placeholder, disclaimer) ... JS section 1 (CONFIG.text)
+    Change server routes ............. JS section 1 (CONFIG.endpoints)
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ThreadSync AI — Autonomous Agent System</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E🧩%3C/text%3E%3C/svg%3E">
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* =====================================================================
+   1. DESIGN SETTINGS: change these values to restyle the whole app
+   ===================================================================== */
+:root {
+  /* Colours */
+  --bg: #131314;            /* page background */
+  --panel: #1e1f20;         /* sidebar, composer, cards */
+  --panel-2: #252628;       /* inline code, disabled buttons */
+  --border: #2d2e30;        /* thin dividers */
+  --border-strong: #37393b; /* button outlines */
+  --hover: #282a2c;         /* hover background */
+  --text: #e3e3e3;          /* main text */
+  --muted: #8e918f;         /* secondary text */
+  --accent: #a8c7fa;        /* highlights, send button, links */
+  --accent-text: #0b1d3a;   /* text/icon colour on top of --accent */
+  --warning: #ffaa00;       /* approval (human-in-the-loop) card */
+
+  /* Fonts */
+  --font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --font-size: 15px;
+
+  /* Layout */
+  --sidebar-width: 280px;
+  --chat-width: 52rem;      /* max width of messages and typing bar */
+  --radius: 10px;           /* buttons and cards */
+    /* typing bar */
+
+  color-scheme: dark;
+}
+
+/* =====================================================================
+   2. BASE: resets, page layout, shared pieces
+   ===================================================================== */
+* { box-sizing: border-box; margin: 0; padding: 0; scrollbar-width: none; }  /* scrollbar-width: none hides scrollbars (Firefox) */
+*::-webkit-scrollbar { display: none; }                                      /* ...and Chrome / Edge / Safari */
+
+body { font: var(--font-size)/1.6 var(--font); background: var(--bg); color: var(--text); display: flex; height: 100dvh; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.button { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .55rem .75rem; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--bg); font-size: .8rem; font-weight: 500; transition: background .15s; }
+.button:hover:not(:disabled) { background: var(--hover); }
+.button:disabled { opacity: .5; cursor: default; }
+.button.chosen { opacity: 1; border-color: var(--accent); color: var(--accent); }
+.icon-button { display: grid; place-items: center; padding: .45rem; border-radius: 8px; color: var(--muted); }
+.icon-button:hover { background: var(--hover); color: var(--text); }
+.section-label { padding: 1.25rem .5rem .4rem; font-size: .75rem; font-weight: 500; color: var(--muted); }
+
+/* =====================================================================
+   3. SIDEBAR: brand, New chat, recent chats, architecture button
+   ===================================================================== */
+.sidebar { width: var(--sidebar-width); flex: none; display: flex; flex-direction: column; padding: 1rem; background: var(--panel); border-right: 1px solid var(--border); transition: margin .2s; }
+body.sidebar-collapsed .sidebar { margin-left: calc(-1 * var(--sidebar-width)); }
+.brand { display: flex; align-items: center; gap: .6rem; padding: .25rem .5rem; margin-bottom: 1.25rem; font-weight: 600; color: #fff; }
+.brand-logo { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 8px; background: linear-gradient(135deg, var(--accent), #7b9cf0); color: var(--bg); }
+.chat-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: .2rem; }
+.chat-item { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .5rem .75rem; border-radius: var(--radius); font-size: .8rem; text-align: left; color: var(--muted); }
+.chat-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chat-item:hover, .chat-item.active { background: var(--hover); color: var(--text); }
+.chat-item.active .icon { color: var(--accent); }
+.empty-list { padding: .75rem; font-size: .8rem; text-align: center; color: var(--muted); border: 1px dashed var(--border); border-radius: var(--radius); }
+.sidebar-footer { padding-top: .75rem; border-top: 1px solid var(--border); }
+
+/* =====================================================================
+   4. MAIN AREA: top bar, welcome text, scrolling chat
+   ===================================================================== */
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; gap: .5rem; padding: .7rem 1rem; border-bottom: 1px solid var(--border); }
+.topbar h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -.02em; }
+.scroll-area { flex: 1; overflow-y: auto; }
+.chat-column { max-width: var(--chat-width); margin: 0 auto; padding: 1rem 1.5rem 2rem; }
+
+.hero { padding: 1.5rem 0 .5rem; }
+.main:not(.has-chat) .hero { padding-top: 18vh; }   /* centred look on an empty chat */
+.main.has-chat .hero { display: none; }             /* hidden once a chat starts */
+.hero h2 { margin-bottom: .5rem; font-size: 2.25rem; font-weight: 600; line-height: 1.15; letter-spacing: -.03em;
+  background: linear-gradient(90deg, var(--accent), var(--text) 75%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.hero p { color: var(--muted); }
+
+/* =====================================================================
+   5. MESSAGES: avatar + name/time + markdown content
+   ===================================================================== */
+.message { display: flex; gap: 1rem; padding: .75rem 0; }
+.avatar { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: var(--radius); background: var(--panel); border: 1px solid var(--border); color: var(--muted); }
+.message.assistant .avatar { color: var(--accent); }
+.message-body { flex: 1; min-width: 0; }
+.message-meta { margin-bottom: .2rem; font-size: .75rem; color: var(--muted); }
+.caption { display: inline-flex; align-items: center; gap: .4rem; margin-top: .4rem; font-size: .75rem; color: var(--muted); }
+.caption .icon { width: 14px; height: 14px; }
+
+/* Rendered markdown (headings, lists, code, tables...) */
+.markdown { overflow-wrap: anywhere; }
+.markdown > * + * { margin-top: .75rem; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin-top: 1.2rem; line-height: 1.3; letter-spacing: -.01em; }
+.markdown h1 { font-size: 1.4rem; } .markdown h2 { font-size: 1.2rem; } .markdown h3 { font-size: 1.05rem; } .markdown h4 { font-size: 1rem; }
+.markdown ul, .markdown ol { padding-left: 1.4rem; }
+.markdown li + li { margin-top: .25rem; }
+.markdown a { color: var(--accent); }
+.markdown code { padding: .1rem .35rem; border-radius: 5px; background: var(--panel-2); font: .85em var(--font-mono); }
+.markdown pre { padding: .85rem 1rem; overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
+.markdown pre code { padding: 0; background: none; }
+.markdown blockquote { padding-left: 1rem; border-left: 3px solid var(--border-strong); color: var(--muted); }
+.markdown hr { border: 0; border-top: 1px solid var(--border); }
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.markdown table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+.markdown th, .markdown td { padding: .5rem .75rem; text-align: left; border-bottom: 1px solid var(--border); }
+.markdown th { background: var(--panel); font-weight: 600; }
+.markdown tr:last-child td { border-bottom: 0; }
+
+/* "Using rag_tool..." chip */
+.tool-chip { display: inline-flex; align-items: center; gap: .4rem; padding: .2rem .7rem; font-size: .75rem; color: var(--muted); background: var(--panel); border: 1px solid var(--border-strong); border-radius: 99px; }
+.tool-chip .icon { width: 13px; height: 13px; color: var(--accent); }
+
+/* Three bouncing dots while waiting for the first word */
+.typing i { display: inline-block; width: 6px; height: 6px; margin-right: 4px; border-radius: 50%; background: var(--muted); animation: bounce 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes bounce { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Approve / Decline card */
+.approval { display: flex; gap: .75rem; padding: .85rem 1rem; font-size: .9rem; background: rgba(255,170,0,.1); border-left: 4px solid var(--warning); border-radius: var(--radius); }
+.approval .icon { margin-top: .25rem; color: var(--warning); }
+.approval-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; margin-top: .75rem; }
+.approval-buttons .button { justify-content: center; }
+
+/* =====================================================================
+   6. TYPING BAR ("composer"): text box, attach, model picker, send
+   ===================================================================== */
+.dock { position: relative; padding: 0 1.5rem 1rem; }
+.dock::before { content: ""; position: absolute; left: 0; right: 0; top: -28px; height: 28px; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }  /* soft fade above the bar */
+.dock-inner { max-width: var(--chat-width); margin: 0 auto; }
+
+.file-chip { display: none; align-items: center; gap: .5rem; width: fit-content; margin-bottom: .5rem; padding: .3rem .5rem .3rem .75rem; font-size: .75rem; color: var(--accent); background: var(--panel); border: 1px solid var(--border); border-radius: 99px; }
+.file-chip.loading .icon-button { display: none; }
+.file-chip.loading::after { content: ""; width: 12px; height: 12px; border: 2px solid var(--border-strong); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; }
+
+
+
+textarea { display: block; width: 100%; min-height: 26px; max-height: 200px; background: none; border: 0; outline: 0; resize: none; color: inherit; font: inherit; }  /* max-height: how tall the box grows */
+textarea::placeholder { color: var(--muted); }
+.composer-bar { display: flex; align-items: center; gap: .25rem; margin-top: .5rem; }
+.spacer { flex: 1; }
+.send-button { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: var(--accent-text); }
+.send-button:disabled { background: var(--panel-2); color: var(--muted); cursor: default; }
+.disclaimer { margin-top: .6rem; text-align: center; font-size: .7rem; color: var(--muted); }
+
+/* Model picker (opens upward from the typing bar) */
+.model-picker { position: relative; }
+.model-button { display: flex; align-items: center; gap: .4rem; padding: .4rem .7rem; border-radius: 99px; font-size: .8rem; font-weight: 500; color: var(--muted); }
+.model-button:hover, .model-button[aria-expanded=true] { background: var(--hover); color: var(--text); }
+.model-button .icon { width: 14px; height: 14px; }
+.model-menu { display: none; position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 20; min-width: 250px; padding: .35rem; background: var(--panel); border: 1px solid var(--border-strong); border-radius: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.5); }
+.model-menu.open { display: block; }
+.model-option { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; padding: .5rem .65rem; border-radius: 9px; font-size: .85rem; text-align: left; }
+.model-option:hover { background: var(--hover); }
+.model-option small { display: block; font-size: .72rem; color: var(--muted); }
+.model-option .icon { color: var(--accent); visibility: hidden; }
+.model-option[aria-selected=true] .icon { visibility: visible; }
+
+.toast { position: fixed; left: 50%; bottom: 120px; z-index: 50; transform: translateX(-50%); padding: .55rem 1rem; font-size: .8rem; background: var(--panel-2); border: 1px solid var(--border-strong); border-radius: var(--radius); }
+
+/* =====================================================================
+   7. ARCHITECTURE DIALOG
+   ===================================================================== */
+dialog { margin: auto; width: min(720px, 92vw); max-height: 90vh; overflow: auto; padding: 1.5rem; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 16px; }
+dialog::backdrop { background: rgba(0,0,0,.7); }
+.space-between { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.dialog-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; }
+.card { padding: .9rem 1rem; background: rgba(30,31,32,.5); border: 1px solid var(--border); border-radius: 12px; }
+.card b { display: block; font-size: .85rem; font-weight: 500; }
+.card p { margin-top: .3rem; font-size: .75rem; color: var(--muted); }
+.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; margin-bottom: .6rem; }
+.accent-text { font-size: .8rem; font-weight: 600; color: var(--accent); }
+.pill { padding: .1rem .5rem; font: .7rem var(--font-mono); color: var(--muted); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; }
+
+/* =====================================================================
+   8. SMALL SCREENS + ACCESSIBILITY
+   (CSS variables can't be used inside @media, so 820px is typed out here;
+    keep it equal to CONFIG.mobileBreakpoint in the script.)
+   ===================================================================== */
+@media (max-width: 820px) {
+  .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; margin-left: calc(-1 * var(--sidebar-width)); }
+  body.sidebar-open .sidebar { margin-left: 0; }
+  .card-grid { grid-template-columns: 1fr; }
+  .hero h2 { font-size: 1.75rem; }
+  .chat-column, .dock { padding-inline: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+
+<body>
+
+<!-- =====================================================================
+     ICONS: defined once here, drawn anywhere with <svg class="icon"><use href="#icon-NAME"/></svg>
+     ===================================================================== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="icon-plus"  viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="icon-up"    viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></symbol>
+  <symbol id="icon-chev"  viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="icon-chat"  viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="icon-dot"   viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor"/></symbol>
+  <symbol id="icon-file"  viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></symbol>
+  <symbol id="icon-tool"  viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/></symbol>
+  <symbol id="icon-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="icon-x"     viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+  <symbol id="icon-panel" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="icon-flow"  viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect x="13" y="13" width="8" height="8" rx="2"/></symbol>
+  <symbol id="icon-warn"  viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="icon-spark" viewBox="0 0 24 24"><path d="m12 3 1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 3v4M17 5h4"/></symbol>
+  <symbol id="icon-user"  viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></symbol>
+</svg>
+
+<!-- =====================================================================
+     SIDEBAR
+     ===================================================================== -->
+<aside class="sidebar">
+  <div class="brand"><span class="brand-logo"><svg class="icon"><use href="#icon-spark"/></svg></span>ThreadSync chats</div>
+  <button class="button" id="newChatButton"><svg class="icon"><use href="#icon-plus"/></svg>New chat</button>
+  <div class="section-label">Recent</div>
+  <div class="chat-list" id="chatList"></div>
+  <div class="sidebar-footer">
+    <button class="button" id="openArchitectureButton"><svg class="icon"><use href="#icon-flow"/></svg>Architecture &amp; Pipeline</button>
+  </div>
+</aside>
+
+<!-- =====================================================================
+     MAIN AREA
+     ===================================================================== -->
+<main class="main" id="main">
+  <header class="topbar">
+    <button class="icon-button" id="sidebarToggle" aria-label="Toggle sidebar"><svg class="icon"><use href="#icon-panel"/></svg></button>
+    <h1>ThreadSync</h1>
+  </header>
+
+  <!-- Messages (the text in .hero is filled from CONFIG.text) -->
+  <div class="scroll-area" id="scrollArea">
+    <div class="chat-column">
+      <div class="hero"><h2 id="heroTitle"></h2><p id="heroSubtitle"></p></div>
+      <div id="messages"></div>
+    </div>
+  </div>
+
+  <!-- Typing bar -->
+  <div class="dock"><div class="dock-inner">
+    <div class="file-chip" id="fileChip">
+      <svg class="icon"><use href="#icon-file"/></svg><span id="fileChipName"></span>
+      <button class="icon-button" id="removeFileButton" aria-label="Remove file" style="padding:.15rem"><svg class="icon" style="width:14px;height:14px"><use href="#icon-x"/></svg></button>
+    </div>
+
+    <div class="composer">
+      <textarea id="messageInput" rows="1" aria-label="Message"></textarea>
+      <div class="composer-bar">
+        <input type="file" id="fileInput" accept=".pdf" hidden>
+        <button class="icon-button" id="attachButton" title="Attach PDF" aria-label="Attach PDF"><svg class="icon"><use href="#icon-plus"/></svg></button>
+        <span class="spacer"></span>
+
+        <div class="model-picker">
+          <button class="model-button" id="modelButton" aria-haspopup="listbox" aria-expanded="false" title="Choose model">
+            <span id="modelLabel"></span><svg class="icon"><use href="#icon-chev"/></svg>
+          </button>
+          <div class="model-menu" id="modelMenu" role="listbox" aria-label="Model"></div>
+        </div>
+
+        <button class="send-button" id="sendButton" title="Send" aria-label="Send" disabled><svg class="icon"><use href="#icon-up"/></svg></button>
+      </div>
+    </div>
+    <div class="disclaimer" id="disclaimer"></div>
+  </div></div>
+</main>
+
+<!-- =====================================================================
+     ARCHITECTURE DIALOG (plain text, edit freely)
+     ===================================================================== -->
+<dialog id="architectureDialog">
+  <div class="space-between dialog-title">System Architecture &amp; Agent Pipeline
+    <button class="icon-button" id="closeArchitectureButton" aria-label="Close"><svg class="icon"><use href="#icon-x"/></svg></button>
+  </div>
+
+  <div class="card" style="margin-bottom:.6rem">
+    <div class="space-between"><span class="accent-text">Core Agent Runtime</span><span class="pill">LangGraph StateGraph</span></div>
+    <p>Multi-turn autonomous graph orchestration powered by checkpointed conversation memory (SQLite per session thread). Supports cyclical reflection, state persistence, and branch execution.</p>
+  </div>
+
+  <div class="section-label" style="padding-left:0">Equipped Tools &amp; Routing</div>
+  <div class="card-grid">
+    <div class="card"><b>Tavily Web Search</b><p>Real-time web crawling and context extraction for breaking information.</p></div>
+    <div class="card"><b>Alpha Vantage Market Data</b><p>Real-time equity quotes, historical indicators, and valuation series.</p></div>
+    <div class="card"><b>Weatherstack Telemetry</b><p>Global meteorological telemetry and historical atmospheric data.</p></div>
+    <div class="card"><b>FAISS Vector RAG</b><p>In-memory similarity retrieval over attached PDFs and corporate filings.</p></div>
+  </div>
+
+  <div class="card"><span class="accent-text">Human-in-the-Loop (HITL) Safety Gate</span>
+    <p>Equipped with execution interrupt triggers on destructive actions (e.g., simulated stock purchases). Halts agent workflow at checkpoint for user authorization before resuming transaction state.</p>
+  </div>
+
+  <div class="section-label" style="padding-left:0">CI/CD &amp; Infrastructure</div>
+  <div class="card space-between"><span style="font-size:.8rem">Docker Containerization on AWS EC2</span><span class="pill">via GitHub Actions CI/CD</span></div>
+</dialog>
+
+
+<script>
+/* =====================================================================
+   1. CONFIG: the settings you are most likely to change
+   ===================================================================== */
+const CONFIG = {
+  // Server routes. Change these if your backend uses different URLs.
+  endpoints: {
+    threads: '/threads',          // GET  → list of saved chats
+    history: '/history/',         // GET  → /history/<thread_id>
+    upload:  '/upload',           // POST → PDF upload
+    chat:    '/chat/stream',      // POST → send a message (streamed reply)
+    resume:  '/chat/resume',      // POST → answer an Approve/Decline prompt
+  },
+
+  // Models in the picker. `id` must match the values in ALLOWED_MODELS (agent.py).
+  models: [
+    { id: 'openai/gpt-oss-120b',   label: 'GPT-OSS 120B',          provider: 'Groq'   },
+    { id: 'openai/gpt-oss-20b',    label: 'GPT-OSS 20B',           provider: 'Groq'   },    
+    { id: 'gemini-3.6-flash',      label: 'Gemini 3.6 Flash',      provider: 'Google' },
+    { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite', provider: 'Google' },
+    { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash-Lite', provider: 'Google' },
+  ],
+  defaultModel: 'openai/gpt-oss-120b',   // used on first visit
+
+  // Wording shown in the interface
+  text: {
+    heroTitle:    'Hello, I am ThreadSync, your assistant.',
+    heroSubtitle: 'Tell me what you would like to explore, analyze, or simulate today.',
+    placeholder:  'Ask ThreadSync anything...',
+  },
+
+  // Small behaviour settings
+  sidebarTitleMaxLength: 34,        // chat titles longer than this are cut with "…"
+  toastDurationMs: 3500,            // how long pop-up messages stay
+  mobileBreakpoint: 820,            // px; keep equal to the @media value in the CSS
+  modelStorageKey: 'ts_model',      // browser storage key that remembers the chosen model
+};
+
+/* =====================================================================
+   2. STATE + PAGE ELEMENTS
+   ===================================================================== */
+const $ = id => document.getElementById(id);   // shortcut for document.getElementById
+const els = {
+  main: $('main'), scrollArea: $('scrollArea'), messages: $('messages'), chatList: $('chatList'),
+  input: $('messageInput'), sendButton: $('sendButton'), fileInput: $('fileInput'),
+  fileChip: $('fileChip'), fileChipName: $('fileChipName'),
+  modelButton: $('modelButton'), modelMenu: $('modelMenu'), modelLabel: $('modelLabel'),
+  dialog: $('architectureDialog'),
+};
+
+let currentThreadId = null;                 // null = a brand-new chat
+let isBusy = false;                         // true while the agent is replying
+let stickToBottom = true;                   // auto-scroll only if the user is at the bottom
+let selectedModel = CONFIG.defaultModel;
+
+try {                                       // restore the last model the user picked
+  const saved = localStorage.getItem(CONFIG.modelStorageKey);
+  if (CONFIG.models.some(m => m.id === saved)) selectedModel = saved;
+} catch { /* storage unavailable: ignore */ }
+
+/* =====================================================================
+   3. SMALL HELPERS
+   ===================================================================== */
+const icon = name => `<svg class="icon"><use href="#icon-${name}"/></svg>`;
+const currentTime = () => new Date().toTimeString().slice(0, 5);   // "20:39"
+
+/** Make text safe to put inside HTML (so model output can never inject tags). */
+const escapeHtml = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+/** Messages can arrive as a string or a list of parts (Gemini). Always return a string. */
+const toText = c => Array.isArray(c) ? c.map(p => typeof p === 'string' ? p : (p && p.text) || '').join('') : String(c ?? '');
+
+/** The backend prefixes uploads with "[System Note: ...]". Hide it from the user. */
+const PDF_NOTE = /^\[System Note: A new PDF '(.+?)' was just uploaded\.[\s\S]*?\]\s*/;
+function stripPdfNote(text) {
+  const match = PDF_NOTE.exec(text);
+  if (!match) return { text, fileName: null };
+  const rest = text.slice(match[0].length).trim();
+  return { text: rest || `Uploaded \`${match[1]}\``, fileName: match[1] };
+}
+
+function showToast(message) {
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), CONFIG.toastDurationMs);
+}
+
+/* =====================================================================
+   4. MARKDOWN RENDERER: turns the model's text into formatted HTML
+   Supports: headings, bold, italic, `code`, code blocks, lists, quotes,
+   tables, links, divider lines and the "Using tool..." notice.
+   ===================================================================== */
+
+/** Formatting inside one line: `code`, **bold**, *italic*, [links](https://...). */
+function renderInline(line) {
+  const savedCode = [];
+  // 1) Escape HTML, 2) set inline code aside so its content isn't formatted
+  let html = escapeHtml(line).replace(/`([^`]+)`/g, (_, code) => {
+    savedCode.push(`<code>${code}</code>`);
+    return '\uE000' + (savedCode.length - 1) + '\uE001';
+  });
+  html = html
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|mailto:[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*])\*(?!\s)([^*\n]+?)\*(?!\*)/g, '$1<em>$2</em>');
+  return html.replace(/\uE000(\d+)\uE001/g, (_, i) => savedCode[i]);   // put the code back
+}
+
+/** Whole text → HTML. Reads line by line and decides what block each line starts. */
+function renderMarkdown(source) {
+  const lines = source.replace(/\r/g, '').split('\n');
+  const html = [];
+  const splitRow = row => row.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+  let i = 0, match;
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    if (!line.trim()) { i++; continue; }                                   // blank line
+
+    if (/^```/.test(line)) {                                               // code block
+      const code = []; i++;
+      while (i < lines.length && !/^```/.test(lines[i])) code.push(lines[i++]);
+      i++;
+      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+      continue;
+    }
+
+    if ((match = /^\u2699\uFE0F?\s*\*?Using\s+(.+?)\.\.\.\*?\s*$/.exec(line))) {   // "⚙️ *Using rag_tool...*"
+      html.push(`<div><span class="tool-chip">${icon('tool')}Using ${escapeHtml(match[1])}…</span></div>`);
+      i++; continue;
+    }
+
+    if ((match = /^(#{1,4})\s+(.*)/.exec(line))) {                         // # heading
+      const level = match[1].length;
+      html.push(`<h${level}>${renderInline(match[2])}</h${level}>`);
+      i++; continue;
+    }
+
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)) { html.push('<hr>'); i++; continue; }   // divider
+
+    if (/^>/.test(line)) {                                                 // > quote
+      const quote = [];
+      while (i < lines.length && /^>/.test(lines[i])) quote.push(lines[i++].replace(/^>\s?/, ''));
+      html.push(`<blockquote>${renderInline(quote.join('\n')).replace(/\n/g, '<br>')}</blockquote>`);
+      continue;
+    }
+
+    if (line.includes('|') && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1] || '')) {   // | table |
+      const header = splitRow(line), rows = [];
+      i += 2;                                                              // skip header + separator
+      while (i < lines.length && lines[i].trim() && lines[i].includes('|')) rows.push(splitRow(lines[i++]));
+      const th = header.map(c => `<th>${renderInline(c)}</th>`).join('');
+      const body = rows.map(r => `<tr>${r.map(c => `<td>${renderInline(c)}</td>`).join('')}</tr>`).join('');
+      html.push(`<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table></div>`);
+      continue;
+    }
+
+    if (/^\s*([-*+]|\d+[.)])\s+/.test(line)) {                             // - bullet  or  1. numbered
+      const ordered = /^\s*\d/.test(line), items = [];
+      while (i < lines.length && (match = /^(\s*)(?:[-*+]|\d+[.)])\s+(.*)/.exec(lines[i]))) {
+        const indent = Math.min(match[1].length, 8) * 0.55;                // nested items shift right
+        items.push(`<li style="margin-left:${indent}rem">${renderInline(match[2])}</li>`);
+        i++;
+      }
+      const tag = ordered ? 'ol' : 'ul';
+      html.push(`<${tag}>${items.join('')}</${tag}>`);
+      continue;
+    }
+
+    // Anything else is a paragraph (keeps single line breaks)
+    const paragraph = [lines[i++]];
+    while (i < lines.length && lines[i].trim() && !/^(```|#{1,4}\s|>|\u2699|\s*([-*+]|\d+[.)])\s)/.test(lines[i])) paragraph.push(lines[i++]);
+    html.push(`<p>${renderInline(paragraph.join('\n')).replace(/\n/g, '<br>')}</p>`);
+  }
+  return html.join('');
+}
+
+/* =====================================================================
+   5. MESSAGES: adding bubbles to the chat
+   ===================================================================== */
+els.scrollArea.addEventListener('scroll', () => {
+  const { scrollHeight, scrollTop, clientHeight } = els.scrollArea;
+  stickToBottom = scrollHeight - scrollTop - clientHeight < 120;
+});
+
+function scrollToBottom(force = false) {
+  if (force) stickToBottom = true;
+  if (stickToBottom) els.scrollArea.scrollTop = els.scrollArea.scrollHeight;
+}
+
+/**
+ * Adds a message and returns a handle: { row, content, rawText, setText(text) }.
+ * time: undefined = now, '' = no time (used for old chats).
+ */
+function addMessage(role, { time, fileName } = {}) {
+  els.main.classList.add('has-chat');
+  const who = role === 'user' ? 'You' : 'ThreadSync';
+ 
+  const row = document.createElement('article');
+  row.className = `message ${role}`;
+  row.innerHTML = `
+    <div class="avatar">${icon(role === 'user' ? 'user' : 'spark')}</div>
+    <div class="message-body">
+      <div class="markdown"></div>
+    </div>`;
+  if (fileName) row.querySelector('.message-body').insertAdjacentHTML('beforeend', `<div class="caption">${icon('file')}${escapeHtml(fileName)} · Ready to analyze</div>`);
+
+  els.messages.appendChild(row);
+  scrollToBottom(true);
+
+  const content = row.querySelector('.markdown');
+  return {
+    row, content, rawText: '',
+    setText(text) { this.rawText = text; content.innerHTML = renderMarkdown(text); scrollToBottom(); },
+  };
+}
+
+/** Approve / Decline card shown when the agent pauses for permission. */
+function addApprovalCard(prompt) {
+  const row = document.createElement('article');
+  row.className = 'message assistant';
+  row.innerHTML = `
+    <div class="avatar">${icon('spark')}</div>
+    <div class="message-body">
+      <div class="message-meta">ThreadSync · ${currentTime()}</div>
+      <div class="approval">${icon('warn')}<div><strong>Action Required:</strong> ${escapeHtml(typeof prompt === 'string' ? prompt : JSON.stringify(prompt))}</div></div>
+      <div class="approval-buttons">
+        <button class="button" data-decision="yes">Approve (Yes)</button>
+        <button class="button" data-decision="no">Decline (No)</button>
+      </div>
+    </div>`;
+
+  const buttons = row.querySelectorAll('[data-decision]');
+  buttons.forEach(button => button.onclick = () => {
+    buttons.forEach(b => b.disabled = true);       // one click only
+    button.classList.add('chosen');
+    streamReply(CONFIG.endpoints.resume, { decision: button.dataset.decision, model: selectedModel, thread_id: currentThreadId });
+  });
+  els.messages.appendChild(row);
+  scrollToBottom(true);
+}
+
+/* =====================================================================
+   6. TALKING TO THE BACKEND: sending, streaming, uploads
+   ===================================================================== */
+
+/** POSTs to the server and paints the reply word by word as it streams in. */
+async function streamReply(endpoint, body) {
+  setBusy(true);
+  const reply = addMessage('assistant');
+  reply.content.innerHTML = '<span class="typing"><i></i><i></i><i></i></span>';
+
+  let repaintScheduled = 0;
+  const repaint = () => { repaintScheduled = 0; reply.content.innerHTML = renderMarkdown(reply.rawText); scrollToBottom(); };
+  const appendText = text => { reply.rawText += text; repaintScheduled ||= requestAnimationFrame(repaint); };   // at most one repaint per frame
+  const showError = message => appendText(`${reply.rawText ? '\n\n' : ''}The agent hit an error: ${message}`);
+
+  try {
+    const response = await fetch(endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!response.ok) throw new Error(`Server returned ${response.status}`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();                                  // keep the unfinished last line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;            // server-sent events look like: data: {...}
+        let event; try { event = JSON.parse(line.slice(6)); } catch { continue; }
+
+        if (event.thread_id) currentThreadId = event.thread_id;
+        if (event.error)          showError(event.error);
+        else if (event.token)     appendText(toText(event.token));
+        else if (event.interrupt) { cancelAnimationFrame(repaintScheduled); repaint(); addApprovalCard(event.interrupt); }
+        else if (event.done)      loadThreads();
+      }
+    }
+  } catch (error) { showError(error.message); }
+
+  cancelAnimationFrame(repaintScheduled);
+  repaint();
+  if (!reply.rawText) reply.row.remove();                    // nothing to show (e.g. paused for approval)
+  setBusy(false);
+  loadThreads();
+}
+
+/** Called by the Send button / Enter key. Uploads the PDF first if one is attached. */
+async function sendMessage() {
+  if (isBusy) return;
+  let shownText = els.input.value.trim();     // what the user sees in the chat
+  let agentText = shownText;                  // what the agent receives
+  const file = els.fileInput.files[0];
+  if (!shownText && !file) return;
+
+  if (file) {
+    setBusy(true);
+    els.fileChip.classList.add('loading');
+    els.fileChipName.textContent = `Processing ${file.name}…`;
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const result = await (await fetch(CONFIG.endpoints.upload, { method: 'POST', body: form })).json();
+      if (!result.success) throw new Error(result.message || 'Unknown error');
+      showToast(`${file.name} processed successfully.`);
+    } catch (error) {                          // keep the file attached so the user can retry
+      setBusy(false);
+      els.fileChip.classList.remove('loading');
+      els.fileChipName.textContent = file.name;
+      return showToast(`PDF processing failed: ${error.message}`);
+    }
+    const note = `[System Note: A new PDF '${file.name}' was just uploaded.`;
+    agentText = shownText ? `${note} Call rag_tool to answer questions about it.]\n\n${shownText}`
+                          : `${note} Call rag_tool to summarize or acknowledge it.]`;
+    shownText = shownText || `Uploaded \`${file.name}\``;
+  }
+
+  addMessage('user', { fileName: file ? file.name : null }).setText(shownText);
+  els.input.value = '';
+  resizeInput();
+  clearFile();
+  await streamReply(CONFIG.endpoints.chat, { message: agentText, model: selectedModel, thread_id: currentThreadId });
+}
+
+/* =====================================================================
+   7. SAVED CHATS (sidebar)
+   ===================================================================== */
+async function loadThreads() {
+  try {
+    const data = await (await fetch(CONFIG.endpoints.threads)).json();
+    const threads = (data.threads || []).map(t => ({
+      id: t.thread_id,
+      title: stripPdfNote(toText(t.title || t.thread_id)).text.replace(/\s+/g, ' '),
+    }));
+
+    els.chatList.innerHTML = threads.length ? '' : '<div class="empty-list">No recent chats</div>';
+    for (const thread of threads) {
+      const isActive = thread.id === currentThreadId;
+      const max = CONFIG.sidebarTitleMaxLength;
+      const label = thread.title.length <= max ? thread.title : thread.title.slice(0, max - 1) + '…';
+
+      const button = document.createElement('button');
+      button.className = 'chat-item' + (isActive ? ' active' : '');
+      button.title = thread.title;
+      button.innerHTML = `${icon(isActive ? 'dot' : 'chat')}<span>${escapeHtml(label)}</span>`;
+      button.onclick = () => openThread(thread.id);
+      els.chatList.appendChild(button);
+    }
+  } catch (error) { console.error('Could not load threads', error); }
+}
+
+function startNewChat() {
+  currentThreadId = null;
+  els.messages.innerHTML = '';
+  els.main.classList.remove('has-chat');
+  els.input.value = '';
+  clearFile();
+  resizeInput();
+  loadThreads();
+  document.body.classList.remove('sidebar-open');
+}
+
+async function openThread(threadId) {
+  currentThreadId = threadId;
+  els.messages.innerHTML = '';
+  loadThreads();
+  document.body.classList.remove('sidebar-open');
+  try {
+    const data = await (await fetch(CONFIG.endpoints.history + threadId)).json();
+    const history = data.messages || [];
+    els.main.classList.toggle('has-chat', history.length > 0);
+
+    for (const item of history) {
+      const text = toText(item.content);
+      if (item.role === 'user') {
+        const cleaned = stripPdfNote(text);
+        addMessage('user', { time: '', fileName: cleaned.fileName }).setText(cleaned.text);
+      } else {
+        addMessage('assistant', { time: '' }).setText(text);
+      }
+    }
+    if (data.interrupt) addApprovalCard(data.interrupt);     // chat was paused waiting for approval
+    scrollToBottom(true);
+  } catch (error) { console.error('Could not load history', error); }
+}
+
+/* =====================================================================
+   8. TYPING BAR: text box, Send button, PDF attachment
+   ===================================================================== */
+function resizeInput() {                         // grow the box as the user types
+  els.input.style.height = 'auto';
+  els.input.style.height = els.input.scrollHeight + 'px';
+}
+
+function updateSendButton() {                    // disabled when empty or while the agent is replying
+  els.sendButton.disabled = isBusy || !(els.input.value.trim() || els.fileInput.files.length);
+}
+
+function setBusy(busy) { isBusy = busy; updateSendButton(); }
+
+function clearFile() {
+  els.fileInput.value = '';
+  els.fileChip.style.display = 'none';
+  els.fileChip.classList.remove('loading');
+  updateSendButton();
+}
+
+els.input.addEventListener('input', () => { resizeInput(); updateSendButton(); });
+els.input.addEventListener('keydown', event => {          // Enter sends, Shift+Enter = new line
+  if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); sendMessage(); }
+});
+els.sendButton.onclick = sendMessage;
+$('attachButton').onclick = () => els.fileInput.click();
+$('removeFileButton').onclick = clearFile;
+els.fileInput.onchange = () => {
+  const file = els.fileInput.files[0];
+  if (file) { els.fileChipName.textContent = file.name; els.fileChip.style.display = 'flex'; }
+  updateSendButton();
+};
+
+/* =====================================================================
+   9. MODEL PICKER
+   ===================================================================== */
+function renderModelMenu() {
+  els.modelMenu.innerHTML = CONFIG.models.map(model => `
+    <button class="model-option" role="option" data-id="${model.id}" aria-selected="${model.id === selectedModel}">
+      <span>${model.label}<small>${model.provider}</small></span>${icon('check')}
+    </button>`).join('');
+  els.modelLabel.textContent = CONFIG.models.find(m => m.id === selectedModel).label;
+}
+
+function closeModelMenu() {
+  els.modelMenu.classList.remove('open');
+  els.modelButton.setAttribute('aria-expanded', 'false');
+}
+
+els.modelButton.onclick = event => {
+  event.stopPropagation();
+  els.modelButton.setAttribute('aria-expanded', els.modelMenu.classList.toggle('open'));
+};
+els.modelMenu.onclick = event => {
+  const option = event.target.closest('.model-option');
+  if (!option) return;
+  selectedModel = option.dataset.id;
+  try { localStorage.setItem(CONFIG.modelStorageKey, selectedModel); } catch { /* ignore */ }
+  renderModelMenu();
+  closeModelMenu();
+  els.input.focus();
+};
+document.addEventListener('click', closeModelMenu);                                  // click anywhere else closes it
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModelMenu(); });
+
+/* =====================================================================
+   10. SIDEBAR TOGGLE + ARCHITECTURE DIALOG
+   ===================================================================== */
+$('sidebarToggle').onclick = () => {
+  const isMobile = matchMedia(`(max-width:${CONFIG.mobileBreakpoint}px)`).matches;
+  document.body.classList.toggle(isMobile ? 'sidebar-open' : 'sidebar-collapsed');
+};
+$('newChatButton').onclick = startNewChat;
+$('openArchitectureButton').onclick = () => els.dialog.showModal();
+$('closeArchitectureButton').onclick = () => els.dialog.close();
+els.dialog.addEventListener('click', e => { if (e.target === els.dialog) els.dialog.close(); });   // click the dark backdrop
+
+/* =====================================================================
+   11. START-UP
+   ===================================================================== */
+$('heroTitle').textContent = CONFIG.text.heroTitle;
+$('heroSubtitle').textContent = CONFIG.text.heroSubtitle;
+$('disclaimer').textContent = CONFIG.text.disclaimer;
+els.input.placeholder = CONFIG.text.placeholder;
+
+renderModelMenu();
+loadThreads();
+updateSendButton();
+els.input.focus();
+</script>
+</body>
+</html>
