@@ -102,7 +102,7 @@ def chat_node(state: ChatState, config: RunnableConfig):
 tool_node = ToolNode(tools)
 
 # Memory Persistence: A MemorySaver checkpointer (an in-memory storage tool) is attached to the compiled graph, allowing the backend to save and recall conversation snapshots.
-db_folder = Path("ThreadSync_Data")
+db_folder = Path("Data")
 db_folder.mkdir(exist_ok=True)
 db_path = db_folder / "threadsync.db"
 Connection = sqlite3.connect(database=str(db_path), check_same_thread=False)

@@ -2,6 +2,6 @@
 temp
 __pycache__
 node_modules
-faiss_DB
-ThreadSync_Data
 CICD.md
+faiss_DB
+Data
