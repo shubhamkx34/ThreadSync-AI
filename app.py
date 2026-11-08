@@ -23,7 +23,8 @@ try:
     from langgraph.types import Command
 
     from rag_feature import ingest_rag_document
-    from agent import chatbot, checkpoint, get_all_threads
+    # Added ALLOWED_MODELS and DEFAULT_MODEL to support model switching
+    from agent import chatbot, checkpoint, get_all_threads, ALLOWED_MODELS, DEFAULT_MODEL 
 except Exception as exc:  # noqa: BLE001
     st.error(
         f"Could not start the ThreadSync backend: `{exc}`\n\n"
@@ -197,7 +198,6 @@ def load_conversation(thread_id: str) -> list:
     state = chatbot.get_state(config={"configurable": {"thread_id": thread_id}})
     return state.values.get("messages", [])
 
-
 def to_ui_messages(messages: list) -> list:
     """Convert saved LangChain messages into the dicts the UI renders."""
     ui, last_tool = [], None
@@ -209,7 +209,19 @@ def to_ui_messages(messages: list) -> list:
         elif isinstance(message, AIMessage):
             if not message.content:
                 continue
-            content = message.content
+            
+            # Handle Gemini's list formatting 
+            if isinstance(message.content, list):
+                content = "".join(
+                    part.get("text", "") if isinstance(part, dict) else str(part)
+                    for part in message.content
+                )
+            else:
+                content = str(message.content)
+                
+            if not content.strip():
+                continue
+                
             if last_tool:
                 content = f"⚙️ *Using {last_tool}...*\n\n{content}"
                 last_tool = None
@@ -252,6 +264,8 @@ if "thread_titles" not in st.session_state:
     st.session_state["thread_titles"] = {}
 if "message_history" not in st.session_state:
     st.session_state["message_history"] = []
+if "model_id" not in st.session_state:
+    st.session_state["model_id"] = DEFAULT_MODEL
 
 add_thread(st.session_state["thread_id"])
 
@@ -264,8 +278,15 @@ def stream_agent(payload, config):
     for chunk, _metadata in chatbot.stream(payload, config=config, stream_mode="messages"):
         if isinstance(chunk, ToolMessage):
             yield f"⚙️ *Using {getattr(chunk, 'name', None) or 'tool'}...*\n\n"
-        elif isinstance(chunk, AIMessage) and isinstance(chunk.content, str) and chunk.content:
-            yield chunk.content
+        elif isinstance(chunk, AIMessage) and chunk.content:
+            if isinstance(chunk.content, str):
+                yield chunk.content
+            elif isinstance(chunk.content, list):
+                for part in chunk.content:
+                    if isinstance(part, dict) and "text" in part:
+                        yield part["text"]
+                    elif isinstance(part, str):
+                        yield part
 
 
 def render_message(role: str, content: str, ts: str = "") -> None:
@@ -352,6 +373,28 @@ with st.sidebar:
         reset_chat()
         st.rerun()
 
+    # --- Model Selection UI ---
+    st.markdown('<div class="section-label" style="padding-top:1.5rem;">Model Selection</div>', unsafe_allow_html=True)
+    
+    model_options = list(ALLOWED_MODELS.keys())
+    current_model = st.session_state.get("model_id", DEFAULT_MODEL)
+    
+    try:
+        current_index = list(ALLOWED_MODELS.values()).index(current_model)
+    except ValueError:
+        current_index = 0
+        
+    selected_model_label = st.selectbox(
+        "Choose a model",
+        options=model_options,
+        index=current_index,
+        label_visibility="collapsed"
+    )
+    
+    # Store the exact model ID expected by LangGraph backend
+    if ALLOWED_MODELS[selected_model_label] != current_model:
+        st.session_state["model_id"] = ALLOWED_MODELS[selected_model_label]
+
     st.markdown('<div class="section-label" style="padding-top:1.5rem;">Recent</div>', unsafe_allow_html=True)
 
     shown = 0
@@ -376,7 +419,7 @@ with st.sidebar:
         st.markdown('<div class="empty-recent">No recent chats</div>', unsafe_allow_html=True)
 
     # Spacer approximates `mt-auto` from the HTML: keeps the architecture button at the bottom
-    spacer_px = 420 + 42 * shown
+    spacer_px = 500 + 42 * shown # Increased spacer to account for the model selectbox height
     st.markdown(
         f'<div style="height:calc(100vh - {spacer_px}px);min-height:24px;"></div>',
         unsafe_allow_html=True,
@@ -406,7 +449,10 @@ for msg in st.session_state["message_history"]:
         render_message(msg["role"], msg["content"], msg.get("ts", ""))
 
 config = {
-    "configurable": {"thread_id": st.session_state["thread_id"]},
+    "configurable": {
+        "thread_id": st.session_state["thread_id"],
+        "model_id": st.session_state.get("model_id", DEFAULT_MODEL)
+    },
     "metadata": {"thread_id": st.session_state["thread_id"]},
     "run_name": "Threadsync_Trace",
 }
