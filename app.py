@@ -23,13 +23,13 @@ try:
     from langgraph.types import Command
 
     from rag_feature import ingest_rag_document
-    # Added ALLOWED_MODELS and DEFAULT_MODEL to support model switching
+    # Added ALLOWED_MODELS and DEFAULT_MODEL to support model switching[cite: 1, 2]
     from agent import chatbot, checkpoint, get_all_threads, ALLOWED_MODELS, DEFAULT_MODEL 
 except Exception as exc:  # noqa: BLE001
     st.error(
         f"Could not start the ThreadSync backend: `{exc}`\n\n"
-        "Check that your `.env` has GROQ_API_KEY, OPENROUTER_API_KEY and TAVILY_API_KEY "
-        "and that `pip install -r requirements.txt` has been run."
+        "Check that your `.env` has GROQ_API_KEY, GOOGLE_API_KEY, and TAVILY_API_KEY "
+        "and that `pip install -r requirements.txt` has been run.[cite: 1, 2]"
     )
     st.stop()
 
@@ -391,7 +391,7 @@ with st.sidebar:
         label_visibility="collapsed"
     )
     
-    # Store the exact model ID expected by LangGraph backend
+    # Store the exact model ID expected by LangGraph backend[cite: 1, 2]
     if ALLOWED_MODELS[selected_model_label] != current_model:
         st.session_state["model_id"] = ALLOWED_MODELS[selected_model_label]
 
