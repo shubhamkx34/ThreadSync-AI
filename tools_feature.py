@@ -1,27 +1,32 @@
-import os 
-from langchain_core.tools import tool
-from langchain_tavily import TavilySearch
+import os
+import asyncio
 import requests
-from typing import Any
+from langchain_core.tools import tool
+from langchain_mcp_adapters.client import MultiServerMCPClient
 from dotenv import load_dotenv
 
-# Loading API Keys : 
 load_dotenv()
 WEATHERSTACK_API_KEY = os.getenv("WEATHERSTACK_API_KEY")
 ALPHAVANTAGE_API_KEY = os.getenv("ALPHAVANTAGE_API_KEY")
+TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
-
-# Live Search Tool 1
-tavily_search = TavilySearch(
-    max_results=3,
-    topic="general",
-    search_depth="advanced",
-    include_raw_content=False
-)
+# Live Search Tool 1 (via Tavily Remote MCP Server)
+async def _run_tavily_mcp(query: str) -> str:
+    client = MultiServerMCPClient({
+        "tavily": {
+            "transport": "http",
+            "url": f"https://mcp.tavily.com/mcp/?tavilyApiKey={TAVILY_API_KEY}"
+        }
+    })
+    mcp_tools = await client.get_tools()
+    # Select the tavily-search tool exposed by the MCP server
+    search = next((t for t in mcp_tools if "search" in t.name), mcp_tools[0])
+    result = await search.ainvoke({"query": query, "max_results": 3, "search_depth": "advanced"})
+    return str(result)
 @tool
 def search_tool(query: str) -> str:
     """Search the internet for current events, recent news, or real-time information."""
-    return str(tavily_search.invoke({"query": query}))
+    return asyncio.run(_run_tavily_mcp(query))
 
 # Live stock Fetch Tool 2:
 @tool
